@@ -158,7 +158,6 @@
   .skin-swatches{ display:flex; gap:5px; }
   .swatch{ width:20px; height:20px; border-radius:50%; box-shadow: inset 0 2px 3px rgba(255,255,255,0.4), inset 0 -2px 3px rgba(0,0,0,0.2); }
 
-  /* admin panel */
   .admin-setting-item {
     background: var(--panel-light);
     border-radius: 14px;
@@ -286,6 +285,7 @@
 (function(){
   // ===================== 設定 =====================
   const API_BASE_URL = 'https://candyblast-server.onrender.com';
+  const CONFIG_BASE_URL = 'https://raw.githubusercontent.com/ponitan3776/candyblast-config/main';
 
   // ===================== ズーム無効化 =====================
   document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
@@ -300,7 +300,124 @@
     }
   });
 
-  // ===================== 以下、ゲーム本体 =====================
+  // ===================== 設定読み込み =====================
+  async function loadConfig() {
+    try {
+      const [questsRes, skinsRes, commandsRes, settingsRes] = await Promise.all([
+        fetch(`${CONFIG_BASE_URL}/quests.json`),
+        fetch(`${CONFIG_BASE_URL}/skins.json`),
+        fetch(`${CONFIG_BASE_URL}/commands.json`),
+        fetch(`${CONFIG_BASE_URL}/settings.json`)
+      ]);
+      
+      const questsData = await questsRes.json();
+      const skinsData = await skinsRes.json();
+      const commandsData = await commandsRes.json();
+      const settingsData = await settingsRes.json();
+      
+      window.QUEST_DEFS = questsData.quests || [];
+      window.SKIN_DEFS = skinsData.skins || [];
+      window.COMMAND_DEFS = commandsData.commands || [];
+      window.SETTINGS = settingsData.gameSettings || {};
+      
+      console.log('✅ 設定ファイルを読み込みました！');
+      
+      if (window.QUEST_DEFS.length > 0) {
+        const savedProgress = await loadQuestProgress();
+        quests = window.QUEST_DEFS.map(q => ({
+          ...q,
+          progress: savedProgress[q.id]?.progress || 0,
+          claimed: savedProgress[q.id]?.claimed || false
+        }));
+      }
+      
+      return true;
+    } catch (err) {
+      console.warn('⚠️ 設定読み込み失敗、デフォルト値を使用します:', err.message);
+      return false;
+    }
+  }
+
+  // ===================== クエスト進捗読み込み（サーバーから） =====================
+  async function loadQuestProgress() {
+    if (!authToken) return {};
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/quests/progress`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (!res.ok) return {};
+      const data = await res.json();
+      return data.progress || {};
+    } catch (err) {
+      console.warn('⚠️ クエスト進捗読み込み失敗:', err.message);
+      return {};
+    }
+  }
+
+  // ===================== クエスト進捗保存（サーバーに） =====================
+  async function saveQuestProgress(questId, progress, claimed = false) {
+    if (!authToken) return;
+    try {
+      await fetch(`${API_BASE_URL}/api/quests/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ questId, progress, claimed })
+      });
+    } catch (err) {
+      console.warn('⚠️ クエスト進捗保存失敗:', err.message);
+    }
+  }
+
+  // ===================== クエスト報酬受け取り =====================
+  async function claimQuestReward(questId, reward) {
+    if (!authToken) return false;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/quests/claim`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ questId, reward })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || '報酬受け取りに失敗しました');
+      }
+      const data = await res.json();
+      coins = data.coins;
+      updateCoinUI();
+      return true;
+    } catch (err) {
+      console.warn('⚠️ 報酬受け取り失敗:', err.message);
+      alert(err.message);
+      return false;
+    }
+  }
+
+  // ===================== クエスト達成チェック =====================
+  function checkQuestCompletion() {
+    if (!window.QUEST_DEFS || window.QUEST_DEFS.length === 0) return;
+    
+    window.QUEST_DEFS.forEach(qDef => {
+      const currentValue = dailyStats[qDef.statKey] || 0;
+      if (currentValue >= qDef.target) {
+        const existing = quests.find(q => q.id === qDef.id);
+        if (existing && !existing.claimed && existing.progress < qDef.target) {
+          existing.progress = qDef.target;
+          saveQuestProgress(qDef.id, qDef.target, false);
+          if (modalOverlay.classList.contains('show') && modalContent.dataset.mode === 'quests') {
+            renderQuestModal();
+          }
+        }
+      }
+    });
+  }
+
+  // ===================== ゲーム本体 =====================
   let SIZE = 8;
   const COLORS = [
     {bg:'linear-gradient(135deg,#FF8B8B,#FF6B6B)'},
@@ -327,74 +444,7 @@
     return MODE_COIN_MULT[m] * sizeCoinMult(s);
   }
 
-  const SKINS = [
-    { id:'default', name:'ミッドナイトキャンディ', price:0, desc:'定番のパープル×ゴールドの夜空テーマ。',
-      vars:{ '--bg-deep':'#1a1233','--bg-deep2':'#241a45','--panel':'#2c2054','--panel-light':'#382a68',
-        '--gold':'#FFD93D','--coral':'#FF6B6B','--mint':'#3DDC97','--blue':'#4D96FF','--purple':'#B18CFF',
-        '--pink':'#FF6FB5','--lime':'#C6E62D','--text':'#F5F3FF','--text-dim':'#B7ADDA' },
-      titleGrad:'linear-gradient(90deg, #FFD93D, #FF6FB5)',
-      colors:[
-        {bg:'linear-gradient(135deg,#FF8B8B,#FF6B6B)'},{bg:'linear-gradient(135deg,#5FE3B3,#3DDC97)'},
-        {bg:'linear-gradient(135deg,#6FB0FF,#4D96FF)'},{bg:'linear-gradient(135deg,#C9A8FF,#B18CFF)'},
-        {bg:'linear-gradient(135deg,#FF95C9,#FF6FB5)'},{bg:'linear-gradient(135deg,#E1F065,#C6E62D)'},
-        {bg:'linear-gradient(135deg,#FFE270,#FFD93D)'}
-      ] },
-    { id:'sunset', name:'サンセットソーダ', price:150, desc:'夕焼けとクリームソーダの暖色パレット。',
-      vars:{ '--bg-deep':'#2b1024','--bg-deep2':'#4a1730','--panel':'#5c2038','--panel-light':'#742a44',
-        '--gold':'#FFB74D','--coral':'#FF6B4A','--mint':'#FFD97D','--blue':'#FF8F6B','--purple':'#FF9AA8',
-        '--pink':'#FF5E8E','--lime':'#FFDD6B','--text':'#FFF3E8','--text-dim':'#E3AFAF' },
-      titleGrad:'linear-gradient(90deg,#FFB74D,#FF5E8E)',
-      colors:[
-        {bg:'linear-gradient(135deg,#FFB199,#FF7B54)'},{bg:'linear-gradient(135deg,#FFD97D,#FFB74D)'},
-        {bg:'linear-gradient(135deg,#FF9AA8,#FF5E8E)'},{bg:'linear-gradient(135deg,#FFCF6B,#FF9A3C)'},
-        {bg:'linear-gradient(135deg,#FF8AAE,#E8497A)'},{bg:'linear-gradient(135deg,#FFE29A,#FFC15E)'},
-        {bg:'linear-gradient(135deg,#FF7E67,#E8503A)'}
-      ] },
-    { id:'ocean', name:'ディープオーシャン', price:200, desc:'深海の静けさをまとったブルー×ティール。',
-      vars:{ '--bg-deep':'#07161f','--bg-deep2':'#0c2733','--panel':'#123444','--panel-light':'#1a4557',
-        '--gold':'#4DE0E0','--coral':'#FF8A65','--mint':'#3DDCC0','--blue':'#4DA6FF','--purple':'#6FA8DC',
-        '--pink':'#5FC9E8','--lime':'#7FE0C6','--text':'#EAFBFF','--text-dim':'#8FC4D6' },
-      titleGrad:'linear-gradient(90deg,#4DE0E0,#4DA6FF)',
-      colors:[
-        {bg:'linear-gradient(135deg,#6FE3D8,#3DDCC0)'},{bg:'linear-gradient(135deg,#6FB0FF,#3E7EDB)'},
-        {bg:'linear-gradient(135deg,#7FE0C6,#39B893)'},{bg:'linear-gradient(135deg,#8FD3FF,#4DA6FF)'},
-        {bg:'linear-gradient(135deg,#5FC9E8,#2E9BC2)'},{bg:'linear-gradient(135deg,#4DE0E0,#20B2B2)'},
-        {bg:'linear-gradient(135deg,#A0F0E6,#5FD6C4)'}
-      ] },
-    { id:'neon', name:'ネオンナイト', price:300, desc:'漆黒に浮かぶ蛍光カラーのサイバーテーマ。',
-      vars:{ '--bg-deep':'#08060f','--bg-deep2':'#120a24','--panel':'#1c1030','--panel-light':'#28163f',
-        '--gold':'#F5FF3D','--coral':'#FF3DBB','--mint':'#3DFFD5','--blue':'#3DAFFF','--purple':'#B93DFF',
-        '--pink':'#FF3DBB','--lime':'#C6FF3D','--text':'#F2F0FF','--text-dim':'#9C8FCC' },
-      titleGrad:'linear-gradient(90deg,#F5FF3D,#FF3DBB)',
-      colors:[
-        {bg:'linear-gradient(135deg,#FF6DD9,#FF3DBB)'},{bg:'linear-gradient(135deg,#5DFFE0,#3DFFD5)'},
-        {bg:'linear-gradient(135deg,#6DC3FF,#3DAFFF)'},{bg:'linear-gradient(135deg,#CE7DFF,#B93DFF)'},
-        {bg:'linear-gradient(135deg,#FF7DCF,#FF3DBB)'},{bg:'linear-gradient(135deg,#E0FF6D,#C6FF3D)'},
-        {bg:'linear-gradient(135deg,#FBFF6D,#F5FF3D)'}
-      ] },
-    { id:'sakura', name:'さくらパステル', price:250, desc:'春の花びらのようなやわらかいピンク×白。',
-      vars:{ '--bg-deep':'#2a1a22','--bg-deep2':'#3d2530','--panel':'#4a2c3a','--panel-light':'#5c3849',
-        '--gold':'#FFC1CC','--coral':'#FF9EB5','--mint':'#C8F0DD','--blue':'#B8D8F0','--purple':'#D9C1EA',
-        '--pink':'#FFB3D1','--lime':'#E8F0B8','--text':'#FFF6F8','--text-dim':'#D9AFC0' },
-      titleGrad:'linear-gradient(90deg,#FFC1CC,#D9C1EA)',
-      colors:[
-        {bg:'linear-gradient(135deg,#FFD1DC,#FF9EB5)'},{bg:'linear-gradient(135deg,#D6F5E3,#C8F0DD)'},
-        {bg:'linear-gradient(135deg,#D2E7FA,#B8D8F0)'},{bg:'linear-gradient(135deg,#E9D8F5,#D9C1EA)'},
-        {bg:'linear-gradient(135deg,#FFC7E0,#FFB3D1)'},{bg:'linear-gradient(135deg,#F1F5C6,#E8F0B8)'},
-        {bg:'linear-gradient(135deg,#FFE3EA,#FFC1CC)'}
-      ] },
-    { id:'goldlux', name:'ゴールドラグジュアリー', price:500, desc:'漆黒とゴールドの高級ジュエリーテーマ。',
-      vars:{ '--bg-deep':'#0a0a0a','--bg-deep2':'#161412','--panel':'#211c16','--panel-light':'#332b1f',
-        '--gold':'#F5D57A','--coral':'#E8A33D','--mint':'#D4B26A','--blue':'#C9A24A','--purple':'#B8934A',
-        '--pink':'#F0C97A','--lime':'#E0C05A','--text':'#FBF3E0','--text-dim':'#B8A582' },
-      titleGrad:'linear-gradient(90deg,#F5D57A,#E8A33D)',
-      colors:[
-        {bg:'linear-gradient(135deg,#F5D57A,#D4A94A)'},{bg:'linear-gradient(135deg,#F0C060,#D89B2E)'},
-        {bg:'linear-gradient(135deg,#E8B84A,#C79430)'},{bg:'linear-gradient(135deg,#F5E0A0,#E0BA5A)'},
-        {bg:'linear-gradient(135deg,#D9A94E,#B8873A)'},{bg:'linear-gradient(135deg,#F0D890,#DDB758)'},
-        {bg:'linear-gradient(135deg,#EFCB74,#C99A3E)'}
-      ] }
-  ];
+  const SKINS = [];
   let ownedSkins = ['default'];
   let equippedSkin = 'default';
 
@@ -443,7 +493,6 @@
   let soundOn = true;
   let dragState = null;
 
-  // admin設定
   let adminDisabledBlocks = [];
   let adminSafetyMode = false;
 
@@ -465,7 +514,6 @@
   function boardIndex(r,c){ return r*SIZE+c; }
   function todayKey(){ return new Date().toISOString().slice(0,10); }
 
-  // ===================== ボード初期化 =====================
   function initBoard(){
     boardEl.innerHTML = ''; board = []; cellEls = [];
     const gap = SIZE<=8 ? 4 : (SIZE<=12 ? 3 : 2);
@@ -591,11 +639,10 @@
   }
 
   function fillTray(){
-    // adminのブロック除外設定を反映
     let availableShapes = SHAPES;
     if (currentUserId === 'admin' && adminDisabledBlocks.length > 0) {
       availableShapes = SHAPES.filter((_, idx) => !adminDisabledBlocks.includes(idx));
-      if (availableShapes.length === 0) availableShapes = SHAPES; // 全部オフになったらリセット
+      if (availableShapes.length === 0) availableShapes = SHAPES;
     }
     tray = [
       randomShapeColor(pickShapeForMode()),
@@ -655,9 +702,7 @@
     return false;
   }
   function checkGameOver(){
-    // 強制セーフティモードがONならゲームオーバーにならない
     if (currentUserId === 'admin' && adminSafetyMode) {
-      // トレイが空なら補充
       if (tray.every(p => p.used)) {
         fillTray();
       }
@@ -668,7 +713,6 @@
     if(!stillPossible && remaining.length>0) endGame();
   }
 
-  // ===================== ドラッグ操作 =====================
   function startDrag(e, trayIdx){
     e.preventDefault();
     unlockAudio();
@@ -842,20 +886,6 @@
     return earned;
   }
 
-  // ===================== クエスト =====================
-  const QUEST_POOL = [
-    { id:'singleScore400', desc:'1回のプレイでスコア400点以上を叩き出す', statKey:'bestSingleGameScore', target:400, reward:50 },
-    { id:'tripleClear', desc:'1回の設置で3ライン以上同時に消す(トリプルクリア)', statKey:'tripleClearCount', target:1, reward:70 },
-    { id:'comboStreak4', desc:'1回のプレイでコンボストリークを4連続つなげる', statKey:'maxComboStreak', target:4, reward:65 },
-    { id:'lines25', desc:'ラインを合計25本消す', statKey:'linesCleared', target:25, reward:55 },
-    { id:'hardMode1', desc:'「硬い」以上の難易度でゲームを1回プレイし切る', statKey:'hardModeGamesPlayed', target:1, reward:45 },
-    { id:'pieces60', desc:'ピースを合計60個配置する', statKey:'piecesPlaced', target:60, reward:40 },
-    { id:'score600total', desc:'1日の合計スコアを600点稼ぐ', statKey:'scoreEarned', target:600, reward:50 },
-    { id:'noClearStreak10', desc:'ラインを消さずにピースを10個連続で置く我慢比べ', statKey:'maxNoClearStreak', target:10, reward:60 },
-    { id:'bigPiece5', desc:'5マス以上の大きいブロックを5個配置する', statKey:'bigPiecesPlaced', target:5, reward:55 },
-    { id:'play3', desc:'ゲームを3回プレイする', statKey:'gamesPlayed', target:3, reward:30 }
-  ];
-
   function pickDailyQuests(){
     const pool = [...QUEST_POOL];
     const picked = [];
@@ -910,28 +940,46 @@
   function renderQuestModal(){
     modalContent.dataset.mode = 'quests';
     let html = `<h2 style="color:var(--mint);">📋 デイリークエスト</h2><div class="sub">毎日リセットされます。がんばって集めよう！</div>`;
-    quests.forEach(q=>{
-      const pct = Math.min(100, Math.floor((q.progress/q.target)*100));
+    
+    if (!quests || quests.length === 0) {
+      html += `<div class="sub">🔄 クエスト情報を読み込み中...</div>`;
+      modalContent.innerHTML = html;
+      return;
+    }
+    
+    quests.forEach(q => {
+      const pct = Math.min(100, Math.floor((q.progress / q.target) * 100));
       const done = q.progress >= q.target;
       html += `
         <div class="quest-item">
           <div class="qtitle">${q.desc}</div>
           <div class="quest-bar-bg"><div class="quest-bar-fill" style="width:${pct}%"></div></div>
           <div class="quest-foot">
-            <span>${Math.min(q.progress,q.target)} / ${q.target}</span>
-            <button class="claim-btn" data-qid="${q.id}" ${(!done||q.claimed)?'disabled':''}>
-              ${q.claimed ? '受取済み' : `🪙${q.reward} 受け取る`}
+            <span>${Math.min(q.progress, q.target)} / ${q.target}</span>
+            <button class="claim-btn" data-qid="${q.id}" data-reward="${q.reward}" ${(!done || q.claimed) ? 'disabled' : ''}>
+              ${q.claimed ? '✅ 受取済み' : `🪙${q.reward} 受け取る`}
             </button>
           </div>
-        </div>`;
+        </div>
+      `;
     });
     modalContent.innerHTML = html;
-    modalContent.querySelectorAll('.claim-btn').forEach(btn=>{
-      btn.addEventListener('click', ()=>claimQuest(btn.dataset.qid));
+    
+    modalContent.querySelectorAll('.claim-btn:not([disabled])').forEach(btn => {
+      btn.addEventListener('click', async function() {
+        const questId = this.dataset.qid;
+        const reward = parseInt(this.dataset.reward, 10);
+        const success = await claimQuestReward(questId, reward);
+        if (success) {
+          const q = quests.find(q => q.id === questId);
+          if (q) q.claimed = true;
+          renderQuestModal();
+          syncToServer();
+        }
+      });
     });
   }
 
-  // ===================== スキン =====================
   function applySkin(id){
     const skin = SKINS.find(s=>s.id===id) || SKINS[0];
     equippedSkin = skin.id;
@@ -982,7 +1030,6 @@
     try{ await window.storage.set(STORAGE_SKINS, JSON.stringify({owned:ownedSkins, equipped:equippedSkin}), false); }catch(err){}
   }
 
-  // ===================== 設定 =====================
   async function loadSettings(){
     let isFirstTime = true;
     try{
@@ -1095,7 +1142,6 @@
     modalOverlay.classList.add('show');
   });
 
-  // ===================== 永続化 =====================
   async function loadBest(){
     try{ const res = await window.storage.get(STORAGE_BEST, false); if(res && res.value) best = parseInt(res.value,10)||0; }catch(err){ best=0; }
     bestValEl.textContent = best;
@@ -1107,7 +1153,6 @@
   }
   async function saveCoins(val){ try{ await window.storage.set(STORAGE_COINS, String(val), false); }catch(err){} }
 
-  // ===================== サウンド =====================
   let audioCtx = null;
   function unlockAudio(){
     try{
@@ -1150,7 +1195,6 @@
   });
   document.body.addEventListener('pointerdown', unlockAudio, { once:true });
 
-  // ===================== ゲームオーバー =====================
   function endGame(){
     dailyStats.gamesPlayed += 1;
     if(currentMode==='hard' || currentMode==='extreme') dailyStats.hardModeGamesPlayed = (dailyStats.hardModeGamesPlayed||0) + 1;
@@ -1163,6 +1207,7 @@
     coinEarnedNoteEl.textContent = earned>0 ? `🪙 +${earned} コイン獲得！` : '';
     overlayEl.classList.add('show');
     syncToServer();
+    checkQuestCompletion();
   }
   restartBtn.addEventListener('click', ()=>{
     overlayEl.classList.remove('show');
@@ -1172,7 +1217,6 @@
     fillTray();
   });
 
-  // ===================== モーダル共通 =====================
   function closeModal(){ modalOverlay.classList.remove('show'); modalContent.dataset.mode=''; }
   modalClose.addEventListener('click', closeModal);
   modalOverlay.addEventListener('click', (e)=>{ if(e.target===modalOverlay) closeModal(); });
@@ -1182,11 +1226,9 @@
     modalOverlay.classList.add('show');
   });
 
-  // ===================== アカウント =====================
   function updateAccountButton(){
     accountBtn.textContent = currentUserId ? '👤' : '👤';
     accountBtn.title = currentUserId ? `ログイン中: ${currentUserId}` : '未ログイン';
-    // adminボタンの表示制御
     if (currentUserId === 'admin') {
       adminPanelBtn.style.display = 'flex';
       loadAdminSettings();
@@ -1195,7 +1237,6 @@
     }
   }
 
-  // ===================== 管理者パネル =====================
   async function loadAdminSettings() {
     if (!authToken || currentUserId !== 'admin') return;
     try {
@@ -1216,8 +1257,6 @@
       <h2 style="color:var(--gold);">🔧 管理者パネル</h2>
       <div class="sub">admin専用設定です。ゲームバランスの調整に使えます。</div>
     `;
-
-    // コイン編集
     html += `
       <div class="admin-setting-item">
         <div class="label-row"><span>🪙 コイン編集</span></div>
@@ -1225,8 +1264,6 @@
         <button class="primary-btn" id="adminCoinsBtn">コインを更新</button>
       </div>
     `;
-
-    // ベストスコア編集
     html += `
       <div class="admin-setting-item">
         <div class="label-row"><span>🏆 ベストスコア編集</span></div>
@@ -1234,8 +1271,6 @@
         <button class="primary-btn" id="adminScoreBtn">スコアを更新</button>
       </div>
     `;
-
-    // ブロック一覧＋オンオフ
     html += `
       <div class="admin-setting-item">
         <div class="label-row"><span>🧩 ブロック出現設定（オフにすると出現しなくなります）</span></div>
@@ -1265,8 +1300,6 @@
       `;
     });
     html += `</div></div>`;
-
-    // 強制セーフティ
     html += `
       <div class="admin-setting-item">
         <div class="label-row">
@@ -1281,10 +1314,8 @@
         <div class="sub" style="margin:4px 0 0;">ONにするとゲームオーバーが発生しなくなります（adminのみ）。</div>
       </div>
     `;
-
     modalContent.innerHTML = html;
 
-    // イベントバインド
     document.getElementById('adminCoinsBtn').addEventListener('click', async () => {
       const val = parseInt(document.getElementById('adminCoinsInput').value, 10);
       if (isNaN(val) || val < 0) return;
@@ -1319,12 +1350,11 @@
       } catch (err) {}
     });
 
-    // ブロックトグル
     document.querySelectorAll('.toggle-switch[data-block-index]').forEach(el => {
       el.addEventListener('click', async function() {
         const idx = parseInt(this.dataset.blockIndex, 10);
         const currentOff = adminDisabledBlocks.includes(idx);
-        const enabled = currentOff; // 今OFFならONにする
+        const enabled = currentOff;
         try {
           const res = await fetch(`${API_BASE_URL}/api/admin/block-toggle`, {
             method: 'POST',
@@ -1340,7 +1370,6 @@
       });
     });
 
-    // セーフティトグル
     const safetyToggle = document.getElementById('safetyToggle');
     if (safetyToggle) {
       safetyToggle.addEventListener('click', async function() {
@@ -1507,7 +1536,6 @@
     }catch(err){ console.warn('サーバーからの取得に失敗しました:', err.message); }
   }
 
-  // ===================== ランキング機能 =====================
   async function renderRankingModal() {
     modalContent.dataset.mode = 'ranking';
     modalContent.innerHTML = `
@@ -1604,13 +1632,13 @@
     modalOverlay.classList.add('show');
   });
 
-  // ===================== 初期化 =====================
   (async function start(){
     await loadBest();
     await loadCoins();
     await loadSkinsData();
     const isFirstTime = await loadSettings();
     await loadDailyQuests();
+    await loadConfig();
     updateAccountButton();
     updateModeBadge();
     initBoard();
