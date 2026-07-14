@@ -94,6 +94,7 @@
     70%{ opacity:1; transform:translate(-50%,-60%) scale(1.0) rotate(0deg); }
     100%{ opacity:0; transform:translate(-50%,-90%) scale(0.9) rotate(0deg); } }
   .combo-text.show{ animation:comboPop 0.9s ease-out forwards; }
+  .combo-text.bonus{ animation:comboPop 0.9s ease-out forwards; color:var(--mint); }
 
   .coin-float{ position:fixed; font-family:'Baloo 2',sans-serif; font-weight:700; color:var(--gold); font-size:18px;
     z-index:40; pointer-events:none; text-shadow:0 2px 4px rgba(0,0,0,0.4); }
@@ -466,6 +467,8 @@
   let pendingMode = currentMode, pendingSize = SIZE;
   let authToken = null;
   let currentUserId = null;
+  let playTime = 0;
+  let playTimeInterval = null;
 
   const STORAGE_BEST = 'candyblast-highscore';
   const STORAGE_COINS = 'candyblast-coins';
@@ -473,18 +476,59 @@
   const STORAGE_SETTINGS = 'candyblast-settings-v1';
   const STORAGE_SKINS = 'candyblast-skins-v1';
 
-  // ===================== ランキング用（柔らかいを一番右に） =====================
-  const RANKING_MODES = ['baked', 'hard', 'extreme', 'soft'];
+  // ===================== ランキング用 =====================
+  // 柔らかいを一番左に
+  const RANKING_MODES = ['soft', 'baked', 'hard', 'extreme'];
   const RANKING_MODE_LABELS = {
+    soft: '🍮 柔らかい',
     baked: '🍪 焼成',
     hard: '🍬 硬い',
-    extreme: '🧊 激硬',
-    soft: '🍮 柔らかい'
+    extreme: '🧊 激硬'
   };
-  let currentRankingMode = 'baked';
+  let currentRankingMode = 'soft';
+
+  // ランキング種別
+  const RANKING_TYPES = ['score', 'coins', 'playtime'];
+  const RANKING_TYPE_LABELS = {
+    score: '🏆 スコア',
+    coins: '🪙 コイン',
+    playtime: '⏱️ プレイ時間'
+  };
+  let currentRankingType = 'score';
 
   function boardIndex(r,c){ return r*SIZE+c; }
   function todayKey(){ return new Date().toISOString().slice(0,10); }
+
+  // ===================== プレイ時間計測 =====================
+  function startPlayTimeTracking() {
+    if (playTimeInterval) return;
+    playTimeInterval = setInterval(() => {
+      playTime++;
+    }, 1000);
+  }
+
+  function stopPlayTimeTracking() {
+    if (playTimeInterval) {
+      clearInterval(playTimeInterval);
+      playTimeInterval = null;
+    }
+  }
+
+  function syncPlayTime() {
+    if (!authToken) return;
+    fetch(`${API_BASE_URL}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${authToken}` },
+      body: JSON.stringify({ playTime })
+    }).catch(() => {});
+  }
+
+  // ゲーム開始時にプレイ時間計測開始
+  const originalStart = start;
+  start = function() {
+    startPlayTimeTracking();
+    originalStart.call(this);
+  };
 
   // ===================== ボード初期化 =====================
   function initBoard(){
@@ -615,7 +659,6 @@
     if(bestShape && bestCount > 0) tray[0] = randomShapeColor(bestShape);
   }
 
-  // ===================== fillTray（ブロックオンオフ対応） =====================
   function fillTray(){
     let availableShapes = SHAPES;
     if (currentUserId === 'admin' && adminDisabledBlocks.length > 0) {
@@ -793,6 +836,15 @@
       addScore(lineScore + streakBonus);
       showCombo(linesCleared, streak);
       updateQuestProgress();
+
+      // ===== 全消しボーナス =====
+      const totalFilled = board.reduce((sum, cell) => sum + (cell.filled ? 1 : 0), 0);
+      if (totalFilled === 0 && linesCleared > 0) {
+        const bonus = linesCleared * 50 + 100;
+        addScore(bonus);
+        showComboText(`✨ 全消しボーナス +${bonus}点!`);
+      }
+
       setTimeout(()=>{
         cellsToClear.forEach(idx=>{ board[idx] = {filled:false, colorIdx:-1}; cellEls[idx].className='cell'; cellEls[idx].style.background=''; });
         if(tray.every(p=>p.used)) fillTray(); else checkGameOver();
@@ -811,7 +863,14 @@
     if(linesCleared>=2) msg = `COMBO x${linesCleared}!`;
     if(streakVal>=2) msg += (msg?'  ':'') + `🔥x${streakVal}`;
     comboTextEl.textContent = msg;
-    comboTextEl.classList.remove('show'); void comboTextEl.offsetWidth; comboTextEl.classList.add('show');
+    comboTextEl.className = 'combo-text show';
+    setTimeout(() => { comboTextEl.className = 'combo-text'; }, 900);
+  }
+
+  function showComboText(msg){
+    comboTextEl.textContent = msg;
+    comboTextEl.className = 'combo-text bonus show';
+    setTimeout(() => { comboTextEl.className = 'combo-text'; }, 900);
   }
 
   function spawnConfetti(cellEl){
@@ -1183,10 +1242,11 @@
     newBestNoteEl.textContent = (score>=best && score>0) ? '🎉 ハイスコア更新！' : 'お疲れさまでした！';
     coinEarnedNoteEl.textContent = earned>0 ? `🪙 +${earned} コイン獲得！` : '';
     overlayEl.classList.add('show');
-    // スコアをサーバーに保存（ランキング用・8x8のみ）
     if (SIZE === 8) {
       syncToServer();
     }
+    // プレイ時間を保存
+    syncPlayTime();
   }
   restartBtn.addEventListener('click', ()=>{
     overlayEl.classList.remove('show');
@@ -1206,7 +1266,7 @@
     modalOverlay.classList.add('show');
   });
 
-  // ===================== アカウント（削除機能付き） =====================
+  // ===================== アカウント（削除機能付き・ログイン時スコア反映） =====================
   function updateAccountButton(){
     accountBtn.textContent = currentUserId ? '👤' : '👤';
     accountBtn.title = currentUserId ? `ログイン中: ${currentUserId}` : '未ログイン';
@@ -1231,6 +1291,10 @@
       alert('アカウントを削除しました。');
       authToken = null;
       currentUserId = null;
+      best = 0;
+      bestValEl.textContent = '0';
+      coins = 0;
+      coinValEl.textContent = '0';
       updateAccountButton();
       renderAuthModal();
     } catch(err) {
@@ -1250,7 +1314,16 @@
         <button class="ghost-btn" id="deleteAccountBtn" style="color:var(--coral);border-color:var(--coral);">🗑️ アカウント削除</button>
       `;
       document.getElementById('logoutBtn').addEventListener('click', ()=>{
-        authToken=null; currentUserId=null; updateAccountButton(); renderAuthModal();
+        authToken=null;
+        currentUserId=null;
+        best = 0;
+        bestValEl.textContent = '0';
+        coins = 0;
+        coinValEl.textContent = '0';
+        stopPlayTimeTracking();
+        playTime = 0;
+        updateAccountButton();
+        renderAuthModal();
       });
       document.getElementById('syncNowBtn').addEventListener('click', async ()=>{
         await syncToServer();
@@ -1304,7 +1377,14 @@
         const r = await fetch(`${API_BASE_URL}/api/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,password}) });
         const data = await r.json();
         if(!r.ok) throw new Error(data.error || 'ログインに失敗しました。');
-        authToken = data.token; currentUserId = data.id;
+        authToken = data.token;
+        currentUserId = data.id;
+        best = data.bestScore || 0;
+        bestValEl.textContent = best;
+        coins = data.coins || 0;
+        coinValEl.textContent = coins;
+        playTime = data.playTime || 0;
+        startPlayTimeTracking();
         msgEl.textContent = 'ログインしました！'; msgEl.className='auth-msg ok';
         await syncFromServer();
         updateAccountButton();
@@ -1325,6 +1405,12 @@
         const data = await r.json();
         if(!r.ok) throw new Error(data.error || '登録に失敗しました。');
         authToken = data.token; currentUserId = data.id;
+        best = 0;
+        bestValEl.textContent = '0';
+        coins = 0;
+        coinValEl.textContent = '0';
+        playTime = 0;
+        startPlayTimeTracking();
         msgEl.textContent = '登録が完了しました！復元コードは管理者のDiscordに通知されました。';
         msgEl.className='auth-msg ok';
         await syncToServer();
@@ -1357,21 +1443,22 @@
 
   accountBtn.addEventListener('click', ()=>{ renderAuthModal(); modalOverlay.classList.add('show'); });
 
-  // ===================== サーバー同期（スキンも保存） =====================
+  // ===================== サーバー同期 =====================
   async function syncToServer(){
     if(!authToken) return;
     try{
       await fetch(`${API_BASE_URL}/api/sync`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${authToken}` },
-        body: JSON.stringify({ 
-          bestScore: best, 
-          coins, 
+        body: JSON.stringify({
+          bestScore: best,
+          coins,
           skins: ownedSkins,
           equippedSkin,
           quests,
           mode: currentMode,
-          size: SIZE
+          size: SIZE,
+          playTime
         })
       });
     }catch(err){ console.warn('サーバー同期に失敗しました:', err.message); }
@@ -1390,6 +1477,7 @@
         equippedSkin = data.equippedSkin;
         applySkin(equippedSkin);
       }
+      if (data.playTime !== undefined) playTime = data.playTime;
       bestValEl.textContent = best; updateCoinUI(); saveBest(best);
     }catch(err){ console.warn('サーバーからの取得に失敗しました:', err.message); }
   }
@@ -1405,12 +1493,8 @@
         const data = await res.json();
         adminDisabledBlocks = data.disabledBlocks || [];
         adminSafetyMode = data.safetyMode || false;
-        // ブロック設定が反映されているか確認
-        console.log('✅ admin設定読み込み完了:', { adminDisabledBlocks, adminSafetyMode });
       }
-    } catch(e) {
-      console.warn('admin設定読み込み失敗:', e);
-    }
+    } catch(e) {}
   }
 
   // ===================== 管理者コマンド =====================
@@ -1424,6 +1508,23 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'コマンド実行に失敗しました');
+      // コインやスコアが更新されたら表示をリアルタイム反映
+      if (cmd.startsWith('/setcoins')) {
+        const newCoins = parseInt(cmd.split(' ')[1]);
+        if (!isNaN(newCoins) && newCoins >= 0) {
+          coins = newCoins;
+          updateCoinUI();
+        }
+      }
+      if (cmd.startsWith('/setscore')) {
+        const parts = cmd.split(' ');
+        const score = parseInt(parts[2]);
+        if (!isNaN(score) && score >= 0) {
+          best = score;
+          bestValEl.textContent = best;
+          saveBest(best);
+        }
+      }
       return data.result || '✅ コマンドを実行しました';
     } catch(e) {
       return '❌ ' + e.message;
@@ -1438,7 +1539,6 @@
       <div class="sub">admin専用コマンド実行欄です。</div>
     `;
 
-    // コマンド入力のみ
     html += `
       <div class="admin-setting-item">
         <div class="label-row"><span>⌨️ 管理者コマンド</span></div>
@@ -1446,9 +1546,10 @@
         <button class="primary-btn" id="adminCmdBtn">実行</button>
         <div class="cmd-output" id="adminCmdOutput">📋 コマンド一覧:
   /setcoins &lt;amount&gt; - コインを指定値に設定
-  /setscore &lt;mode&gt; &lt;score&gt; - モード別スコア設定 (baked, hard, extreme, soft)
+  /setscore &lt;mode&gt; &lt;score&gt; - モード別スコア設定 (soft, baked, hard, extreme)
   /safety [on|off] - 強制セーフティモード（引数なしで状態表示）
   /resetquests - 全ユーザーのクエスト進捗リセット
+  /setplaytime &lt;seconds&gt; - プレイ時間を設定
   /ban &lt;ID&gt; - ユーザーをBAN
   /unban &lt;ID&gt; - BAN解除
   /resetuser &lt;ID&gt; - ユーザーデータリセット
@@ -1459,7 +1560,6 @@
       </div>
     `;
 
-    // ブロック出現設定（ここに残す）
     html += `
       <div class="admin-setting-item">
         <div class="label-row"><span>🧩 ブロック出現設定（オフにすると出現しなくなります）</span></div>
@@ -1492,7 +1592,6 @@
 
     modalContent.innerHTML = html;
 
-    // コマンド実行
     document.getElementById('adminCmdBtn').addEventListener('click', async () => {
       const input = document.getElementById('adminCmdInput');
       const output = document.getElementById('adminCmdOutput');
@@ -1504,7 +1603,6 @@
       input.value = '';
     });
 
-    // ブロックトグル
     document.querySelectorAll('.toggle-switch[data-block-index]').forEach(el => {
       el.addEventListener('click', async function() {
         const idx = parseInt(this.dataset.blockIndex, 10);
@@ -1521,9 +1619,7 @@
             adminDisabledBlocks = data.settings.disabledBlocks || [];
             renderAdminPanel();
           }
-        } catch(e) {
-          console.warn('ブロックトグル失敗:', e);
-        }
+        } catch(e) {}
       });
     });
   }
@@ -1535,13 +1631,18 @@
     }
   });
 
-  // ===================== ランキング（モード別タブ・柔らかいが一番右） =====================
+  // ===================== ランキング（全機能） =====================
   async function renderRankingModal() {
     modalContent.dataset.mode = 'ranking';
     let html = `
       <h2 style="color:var(--gold);">🏆 ランキング</h2>
       <div class="sub">8×8サイズのスコアのみランキング対象です。</div>
-      <div class="tab-row" style="margin-bottom:10px;">
+      <div class="tab-row" style="margin-bottom:6px;">
+        ${RANKING_TYPES.map(t => `
+          <button class="tab-btn ${currentRankingType === t ? 'active' : ''}" data-rtype="${t}">${RANKING_TYPE_LABELS[t]}</button>
+        `).join('')}
+      </div>
+      <div class="tab-row" id="modeTabs" style="margin-bottom:10px; ${currentRankingType === 'score' ? '' : 'display:none;'}">
         ${RANKING_MODES.map(m => `
           <button class="tab-btn ${currentRankingMode === m ? 'active' : ''}" data-rmode="${m}">${RANKING_MODE_LABELS[m]}</button>
         `).join('')}
@@ -1552,6 +1653,13 @@
     `;
     modalContent.innerHTML = html;
 
+    modalContent.querySelectorAll('.tab-btn[data-rtype]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentRankingType = btn.dataset.rtype;
+        renderRankingModal();
+      });
+    });
+
     modalContent.querySelectorAll('.tab-btn[data-rmode]').forEach(btn => {
       btn.addEventListener('click', () => {
         currentRankingMode = btn.dataset.rmode;
@@ -1560,50 +1668,72 @@
     });
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/ranking?mode=${currentRankingMode}`);
+      const res = await fetch(`${API_BASE_URL}/api/ranking?mode=${currentRankingMode}&type=${currentRankingType}`);
       const data = await res.json();
       let content = `<div style="text-align:left; max-height:380px; overflow-y:auto;">`;
       if (data.top && data.top.length > 0) {
         data.top.forEach((user, index) => {
           const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index+1}.`;
           const isMe = user.id === currentUserId;
+          const valueLabel = currentRankingType === 'coins' ? `${user.value}コイン` :
+                            currentRankingType === 'playtime' ? `${user.value}秒` :
+                            `${user.value}点`;
           content += `
             <div style="display:flex; justify-content:space-between; padding:8px 4px; border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,217,61,0.15); border-radius:8px;' : ''}">
               <span style="font-weight:700; ${isMe ? 'color:var(--gold);' : ''}">${medal} ${user.id} ${isMe ? '👈' : ''}</span>
-              <span style="color:var(--gold); font-weight:800;">${user.best_score}点</span>
+              <span style="color:var(--gold); font-weight:800;">${valueLabel}</span>
             </div>
           `;
         });
       } else {
-        content += `<div class="sub">まだランキングに登録されたユーザーがいません。</div>`;
+        const msg = currentRankingType === 'score' ? 'このモードのランキングデータがまだありません。' :
+                   currentRankingType === 'coins' ? 'まだコインデータがありません。' :
+                   'プレイ時間データがまだありません。';
+        content += `<div class="sub">${msg}</div>`;
       }
       content += `</div>`;
+
       if (authToken && currentUserId) {
-        let myScore = 0;
+        let myValue = 0;
         try {
           const syncRes = await fetch(`${API_BASE_URL}/api/sync`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
           });
           const syncData = await syncRes.json();
-          myScore = syncData.bestScore || 0;
+          if (currentRankingType === 'coins') {
+            myValue = syncData.coins || 0;
+          } else if (currentRankingType === 'playtime') {
+            myValue = syncData.playTime || 0;
+          } else {
+            const bestScores = syncData.bestScores || {};
+            myValue = bestScores[currentRankingMode] || 0;
+          }
         } catch(e) {}
-        if (myScore > 0) {
-          const higherCount = data.top ? data.top.filter(u => u.best_score > myScore).length : 0;
+
+        if (myValue > 0) {
+          const higherCount = data.top ? data.top.filter(u => u.value > myValue).length : 0;
           const myInTop = data.top ? data.top.some(u => u.id === currentUserId) : false;
-          let rankDisplay = myInTop ? `${data.top.findIndex(u => u.id === currentUserId) + 1}位` : `${higherCount + 1}位以上`;
+          let rankDisplay = myInTop ? `${data.top.findIndex(u => u.id === currentUserId) + 1}位` :
+                           (data.top && data.top.length > 0 ? `${higherCount + 1}位以上` : '-');
+          const valueLabel = currentRankingType === 'coins' ? `${myValue}コイン` :
+                            currentRankingType === 'playtime' ? `${myValue}秒` :
+                            `${myValue}点`;
           content += `
             <div style="margin-top:16px; padding:14px 16px; background:linear-gradient(135deg,var(--panel-light),var(--panel)); border-radius:14px; border:2px solid var(--gold); display:flex; justify-content:space-between; align-items:center; position:sticky; bottom:0; backdrop-filter:blur(8px);">
               <span style="font-weight:700; color:var(--gold);">👤 ${currentUserId} の順位</span>
               <span style="font-weight:800; font-size:20px; color:var(--gold);">
                 ${rankDisplay}
-                <span style="font-size:14px; color:var(--text-dim); font-weight:400; margin-left:8px;">${myScore}点</span>
+                <span style="font-size:14px; color:var(--text-dim); font-weight:400; margin-left:8px;">${valueLabel}</span>
               </span>
             </div>
           `;
         } else {
+          const msg = currentRankingType === 'score' ? 'まだこのモードのスコアがありません。' :
+                     currentRankingType === 'coins' ? 'まだコインがありません。' :
+                     'プレイ時間が記録されていません。';
           content += `
             <div style="margin-top:16px; padding:14px 16px; background:var(--panel-light); border-radius:14px; text-align:center; color:var(--text-dim);">
-              📊 まだスコアがありません。ゲームをプレイして順位を獲得しよう！
+              📊 ${msg}
             </div>
           `;
         }
