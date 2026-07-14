@@ -476,8 +476,7 @@
   const STORAGE_SETTINGS = 'candyblast-settings-v1';
   const STORAGE_SKINS = 'candyblast-skins-v1';
 
-  // ===================== ランキング用 =====================
-  // 柔らかいを一番左に
+  // ===================== ランキング用（柔らかいを一番左に） =====================
   const RANKING_MODES = ['soft', 'baked', 'hard', 'extreme'];
   const RANKING_MODE_LABELS = {
     soft: '🍮 柔らかい',
@@ -487,7 +486,7 @@
   };
   let currentRankingMode = 'soft';
 
-  // ランキング種別
+  // ===================== ランキング種別 =====================
   const RANKING_TYPES = ['score', 'coins', 'playtime'];
   const RANKING_TYPE_LABELS = {
     score: '🏆 スコア',
@@ -522,13 +521,6 @@
       body: JSON.stringify({ playTime })
     }).catch(() => {});
   }
-
-  // ゲーム開始時にプレイ時間計測開始
-  const originalStart = start;
-  start = function() {
-    startPlayTimeTracking();
-    originalStart.call(this);
-  };
 
   // ===================== ボード初期化 =====================
   function initBoard(){
@@ -1245,7 +1237,6 @@
     if (SIZE === 8) {
       syncToServer();
     }
-    // プレイ時間を保存
     syncPlayTime();
   }
   restartBtn.addEventListener('click', ()=>{
@@ -1266,7 +1257,7 @@
     modalOverlay.classList.add('show');
   });
 
-  // ===================== アカウント（削除機能付き・ログイン時スコア反映） =====================
+  // ===================== アカウント（ログイン時スコア反映・ログアウト時0） =====================
   function updateAccountButton(){
     accountBtn.textContent = currentUserId ? '👤' : '👤';
     accountBtn.title = currentUserId ? `ログイン中: ${currentUserId}` : '未ログイン';
@@ -1314,8 +1305,9 @@
         <button class="ghost-btn" id="deleteAccountBtn" style="color:var(--coral);border-color:var(--coral);">🗑️ アカウント削除</button>
       `;
       document.getElementById('logoutBtn').addEventListener('click', ()=>{
-        authToken=null;
-        currentUserId=null;
+        authToken = null;
+        currentUserId = null;
+        // ログアウト時にベストスコアを0表示
         best = 0;
         bestValEl.textContent = '0';
         coins = 0;
@@ -1379,6 +1371,7 @@
         if(!r.ok) throw new Error(data.error || 'ログインに失敗しました。');
         authToken = data.token;
         currentUserId = data.id;
+        // ログイン時にベストスコアを反映
         best = data.bestScore || 0;
         bestValEl.textContent = best;
         coins = data.coins || 0;
@@ -1497,7 +1490,7 @@
     } catch(e) {}
   }
 
-  // ===================== 管理者コマンド =====================
+  // ===================== 管理者コマンド（リアルタイム反映対応） =====================
   async function executeAdminCommand(cmd) {
     if (!authToken || currentUserId !== 'admin') return '❌ 管理者権限がありません';
     try {
@@ -1508,9 +1501,11 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'コマンド実行に失敗しました');
-      // コインやスコアが更新されたら表示をリアルタイム反映
+
+      // リアルタイム反映（コイン・スコア）
       if (cmd.startsWith('/setcoins')) {
-        const newCoins = parseInt(cmd.split(' ')[1]);
+        const parts = cmd.split(' ');
+        const newCoins = parseInt(parts[1]);
         if (!isNaN(newCoins) && newCoins >= 0) {
           coins = newCoins;
           updateCoinUI();
@@ -1518,6 +1513,7 @@
       }
       if (cmd.startsWith('/setscore')) {
         const parts = cmd.split(' ');
+        // /setscore <mode> <score> → スコアは3番目の要素
         const score = parseInt(parts[2]);
         if (!isNaN(score) && score >= 0) {
           best = score;
@@ -1525,6 +1521,7 @@
           saveBest(best);
         }
       }
+
       return data.result || '✅ コマンドを実行しました';
     } catch(e) {
       return '❌ ' + e.message;
@@ -1631,7 +1628,7 @@
     }
   });
 
-  // ===================== ランキング（全機能） =====================
+  // ===================== ランキング（全機能：スコア・コイン・プレイ時間） =====================
   async function renderRankingModal() {
     modalContent.dataset.mode = 'ranking';
     let html = `
@@ -1653,6 +1650,7 @@
     `;
     modalContent.innerHTML = html;
 
+    // 種別タブ切り替え
     modalContent.querySelectorAll('.tab-btn[data-rtype]').forEach(btn => {
       btn.addEventListener('click', () => {
         currentRankingType = btn.dataset.rtype;
@@ -1660,6 +1658,7 @@
       });
     });
 
+    // モードタブ切り替え（スコア時のみ）
     modalContent.querySelectorAll('.tab-btn[data-rmode]').forEach(btn => {
       btn.addEventListener('click', () => {
         currentRankingMode = btn.dataset.rmode;
@@ -1693,6 +1692,7 @@
       }
       content += `</div>`;
 
+      // 自分の順位（未プレイ時は「-」表示）
       if (authToken && currentUserId) {
         let myValue = 0;
         try {
