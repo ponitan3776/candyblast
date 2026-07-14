@@ -27,11 +27,22 @@
   #app{ display:flex; flex-direction:column; align-items:center; height:100%; width:100%;
     padding: max(10px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom)); gap:8px; }
   header{ width:100%; max-width:520px; display:flex; align-items:center; justify-content:space-between; padding:4px 6px; gap:8px; }
-  .title{ font-family:'Baloo 2', sans-serif; font-weight:800; font-size:clamp(18px,4.6vw,26px);
-    background:linear-gradient(90deg, var(--gold), var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent;
-    cursor: pointer; padding:4px 10px; border-radius:12px; transition:background 0.2s ease; display:inline-flex; align-items:center; gap:6px; }
+  /* ⭐ 戻るボタン縮小（クエストボタンと同じサイズ感） */
+  .title{ 
+    font-family:'Baloo 2', sans-serif; font-weight:800; font-size:clamp(14px, 3vw, 20px);
+    background:linear-gradient(90deg, var(--gold), var(--pink)); 
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 10px;
+    transition: background 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.4;
+  }
   .title:hover{ background:rgba(255,255,255,0.08); }
-  .title::before{ content:"← "; font-size:0.9em; }
+  .title::before{ content:"← "; font-size:0.8em; }
   .header-right{ display:flex; align-items:center; gap:6px; }
   .icon-btn{ width:36px;height:36px;border-radius:12px; background:var(--panel-light);
     border:1px solid rgba(255,255,255,0.08); display:flex;align-items:center;justify-content:center; font-size:16px; cursor:pointer; flex-shrink:0; }
@@ -305,7 +316,7 @@
   document.addEventListener('gesturechange', function(e) { e.preventDefault(); });
   document.addEventListener('gestureend', function(e) { e.preventDefault(); });
 
-  // ===================== 戻るボタン =====================
+  // ===================== 戻るボタン（サイズはCSSで調整済み） =====================
   document.getElementById('backButton').addEventListener('click', function(e) {
     e.preventDefault();
     if (confirm('本当に戻りますか？\nゲームの進行は保存されません。')) {
@@ -535,7 +546,8 @@
     return filled / board.length;
   }
 
-  function countValidPlacements(shape){
+  function countValidPlacements(shape, pool){
+    const shapes = pool || SHAPES;
     let count = 0;
     for(let r=0;r<SIZE;r++){
       for(let c=0;c<SIZE;c++){
@@ -545,48 +557,51 @@
     return count;
   }
 
-  function pickAdaptiveShape(aggressive){
+  function pickAdaptiveShape(aggressive, pool){
+    const shapes = pool || SHAPES;
     const fullness = boardFullnessRatio();
     const threshold = aggressive ? 0.12 : 0.4;
     const maxBias = aggressive ? 6.0 : 3.2;
     const biasPower = fullness < threshold ? (aggressive ? 1.4 : 0) : ((fullness - threshold) / (1 - threshold)) * maxBias;
-    if(biasPower <= 0) return SHAPES[Math.floor(Math.random()*SHAPES.length)];
+    if(biasPower <= 0) return shapes[Math.floor(Math.random()*shapes.length)];
     let totalWeight = 0;
-    const weights = SHAPES.map(shape=>{
-      const validCount = countValidPlacements(shape);
+    const weights = shapes.map(shape=>{
+      const validCount = countValidPlacements(shape, shapes);
       const sizeBonus = 1 / shape.length;
       const weight = Math.pow(validCount + 0.05, biasPower) * (1 + sizeBonus);
       totalWeight += weight;
       return weight;
     });
     let r = Math.random() * totalWeight;
-    for(let i=0;i<SHAPES.length;i++){
+    for(let i=0;i<shapes.length;i++){
       r -= weights[i];
-      if(r <= 0) return SHAPES[i];
+      if(r <= 0) return shapes[i];
     }
-    return SHAPES[SHAPES.length-1];
+    return shapes[shapes.length-1];
   }
 
-  function pickWeightedBigShape(){
+  function pickWeightedBigShape(pool){
+    const shapes = pool || SHAPES;
     let totalWeight = 0;
-    const weights = SHAPES.map(shape=>{
+    const weights = shapes.map(shape=>{
       const w = Math.pow(shape.length, 2.2);
       totalWeight += w;
       return w;
     });
     let r = Math.random() * totalWeight;
-    for(let i=0;i<SHAPES.length;i++){
+    for(let i=0;i<shapes.length;i++){
       r -= weights[i];
-      if(r <= 0) return SHAPES[i];
+      if(r <= 0) return shapes[i];
     }
-    return SHAPES[SHAPES.length-1];
+    return shapes[shapes.length-1];
   }
 
-  function pickShapeForMode(){
-    if(currentMode==='soft') return pickAdaptiveShape(true);
-    if(currentMode==='hard') return SHAPES[Math.floor(Math.random()*SHAPES.length)];
-    if(currentMode==='extreme') return pickWeightedBigShape();
-    return pickAdaptiveShape(false);
+  function pickShapeForMode(pool){
+    const shapes = pool || SHAPES;
+    if(currentMode==='soft') return pickAdaptiveShape(true, shapes);
+    if(currentMode==='hard') return shapes[Math.floor(Math.random()*shapes.length)];
+    if(currentMode==='extreme') return pickWeightedBigShape(shapes);
+    return pickAdaptiveShape(false, shapes);
   }
 
   function ensurePlayable(){
@@ -613,6 +628,7 @@
     if(bestShape && bestCount > 0) tray[0] = randomShapeColor(bestShape);
   }
 
+  // ===================== fillTray（ブロックオンオフ対応） =====================
   function fillTray(){
     let availableShapes = SHAPES;
     if (currentUserId === 'admin' && adminDisabledBlocks.length > 0) {
@@ -620,9 +636,9 @@
       if (availableShapes.length === 0) availableShapes = SHAPES;
     }
     tray = [
-      randomShapeColor(pickShapeForMode()),
-      randomShapeColor(pickShapeForMode()),
-      randomShapeColor(pickShapeForMode())
+      randomShapeColor(pickShapeForMode(availableShapes)),
+      randomShapeColor(pickShapeForMode(availableShapes)),
+      randomShapeColor(pickShapeForMode(availableShapes))
     ];
     ensurePlayable();
     renderTray();
@@ -1354,11 +1370,9 @@
 
   accountBtn.addEventListener('click', ()=>{ renderAuthModal(); modalOverlay.classList.add('show'); });
 
-  // ===================== サーバー同期 =====================
+  // ===================== サーバー同期（スキンも保存） =====================
   async function syncToServer(){
     if(!authToken) return;
-    // ランキング用：現在のモードとサイズを送信（8x8のみ保存）
-    const modeData = { mode: currentMode };
     try{
       await fetch(`${API_BASE_URL}/api/sync`, {
         method:'POST',
@@ -1366,8 +1380,8 @@
         body: JSON.stringify({ 
           bestScore: best, 
           coins, 
-          skins: ownedSkins, 
-          equippedSkin, 
+          skins: ownedSkins,        // ← 所有スキン
+          equippedSkin,             // ← 装備中スキン
           quests,
           mode: currentMode,
           size: SIZE
@@ -1384,6 +1398,11 @@
       const data = await r.json();
       best = Math.max(best, data.bestScore||0);
       coins = Math.max(coins, data.coins||0);
+      if (data.skins) ownedSkins = data.skins;
+      if (data.equippedSkin) {
+        equippedSkin = data.equippedSkin;
+        applySkin(equippedSkin);
+      }
       bestValEl.textContent = best; updateCoinUI(); saveBest(best);
     }catch(err){ console.warn('サーバーからの取得に失敗しました:', err.message); }
   }
@@ -1428,7 +1447,6 @@
       <div class="sub">admin専用設定です。</div>
     `;
 
-    // コマンド入力
     html += `
       <div class="admin-setting-item">
         <div class="label-row"><span>⌨️ 管理者コマンド</span></div>
@@ -1438,25 +1456,22 @@
       </div>
     `;
 
-    // コイン編集
     html += `
       <div class="admin-setting-item">
-        <div class="label-row"><span>🪙 コイン編集</span></div>
+        <div class="label-row"><span>🪙 コイン編集（指定値に変更）</span></div>
         <input type="number" id="adminCoinsInput" value="${coins}" min="0" step="1">
-        <button class="primary-btn" id="adminCoinsBtn">コインを更新</button>
+        <button class="primary-btn" id="adminCoinsBtn">コインを設定</button>
       </div>
     `;
 
-    // スコア編集
     html += `
       <div class="admin-setting-item">
-        <div class="label-row"><span>🏆 ベストスコア編集</span></div>
+        <div class="label-row"><span>🏆 ベストスコア編集（指定値に変更）</span></div>
         <input type="number" id="adminScoreInput" value="${best}" min="0" step="1">
-        <button class="primary-btn" id="adminScoreBtn">スコアを更新</button>
+        <button class="primary-btn" id="adminScoreBtn">スコアを設定</button>
       </div>
     `;
 
-    // ブロック設定
     html += `
       <div class="admin-setting-item">
         <div class="label-row"><span>🧩 ブロック出現設定（オフにすると出現しなくなります）</span></div>
@@ -1487,7 +1502,6 @@
     });
     html += `</div></div>`;
 
-    // セーフティ
     html += `
       <div class="admin-setting-item">
         <div class="label-row">
@@ -1505,7 +1519,6 @@
 
     modalContent.innerHTML = html;
 
-    // コマンド実行
     document.getElementById('adminCmdBtn').addEventListener('click', async () => {
       const input = document.getElementById('adminCmdInput');
       const output = document.getElementById('adminCmdOutput');
@@ -1517,7 +1530,6 @@
       input.value = '';
     });
 
-    // コイン更新
     document.getElementById('adminCoinsBtn').addEventListener('click', async () => {
       const val = parseInt(document.getElementById('adminCoinsInput').value, 10);
       if (isNaN(val) || val < 0) return;
@@ -1535,7 +1547,6 @@
       } catch(e) {}
     });
 
-    // スコア更新
     document.getElementById('adminScoreBtn').addEventListener('click', async () => {
       const val = parseInt(document.getElementById('adminScoreInput').value, 10);
       if (isNaN(val) || val < 0) return;
@@ -1553,7 +1564,6 @@
       } catch(e) {}
     });
 
-    // ブロックトグル
     document.querySelectorAll('.toggle-switch[data-block-index]').forEach(el => {
       el.addEventListener('click', async function() {
         const idx = parseInt(this.dataset.blockIndex, 10);
@@ -1574,7 +1584,6 @@
       });
     });
 
-    // セーフティトグル
     const safetyToggle = document.getElementById('safetyToggle');
     if (safetyToggle) {
       safetyToggle.addEventListener('click', async function() {
@@ -1618,7 +1627,6 @@
     `;
     modalContent.innerHTML = html;
 
-    // タブ切り替え
     modalContent.querySelectorAll('.tab-btn[data-rmode]').forEach(btn => {
       btn.addEventListener('click', () => {
         currentRankingMode = btn.dataset.rmode;
@@ -1626,7 +1634,6 @@
       });
     });
 
-    // ランキングデータ取得
     try {
       const res = await fetch(`${API_BASE_URL}/api/ranking?mode=${currentRankingMode}`);
       const data = await res.json();
@@ -1646,7 +1653,6 @@
         content += `<div class="sub">まだランキングに登録されたユーザーがいません。</div>`;
       }
       content += `</div>`;
-      // 自分の順位
       if (authToken && currentUserId) {
         let myScore = 0;
         try {
