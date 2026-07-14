@@ -258,7 +258,6 @@
       <div class="icon-btn" id="accountBtn">👤</div>
       <div class="icon-btn" id="rankingBtn" title="ランキング">🏆</div>
       <div class="icon-btn" id="adminPanelBtn" title="管理者パネル" style="display:none;">🔧</div>
-      <!-- 🆕 チャットボタン -->
       <div class="icon-btn" id="chatBtn" title="チャット">💬</div>
     </div>
   </header>
@@ -1256,7 +1255,7 @@
     modalOverlay.classList.add('show');
   });
 
-  // ===================== アカウント =====================
+  // ===================== アカウント（自動ログイン対応） =====================
   function updateAccountButton(){
     accountBtn.textContent = currentUserId ? '👤' : '👤';
     accountBtn.title = currentUserId ? `ログイン中: ${currentUserId}` : '未ログイン';
@@ -1283,6 +1282,8 @@
       currentUserId = null;
       best = 0; bestValEl.textContent = '0';
       coins = 0; coinValEl.textContent = '0';
+      localStorage.removeItem('candyblast_token');
+      localStorage.removeItem('candyblast_user');
       updateAccountButton();
       renderAuthModal();
     } catch(err) {
@@ -1308,6 +1309,8 @@
         coins = 0; coinValEl.textContent = '0';
         stopPlayTimeTracking();
         playTime = 0;
+        localStorage.removeItem('candyblast_token');
+        localStorage.removeItem('candyblast_user');
         updateAccountButton();
         renderAuthModal();
         closeModal();
@@ -1372,6 +1375,9 @@
         coinValEl.textContent = coins;
         playTime = data.playTime || 0;
         startPlayTimeTracking();
+        // ⭐ 自動ログイン用に保存
+        localStorage.setItem('candyblast_token', authToken);
+        localStorage.setItem('candyblast_user', currentUserId);
         msgEl.textContent = 'ログインしました！'; msgEl.className='auth-msg ok';
         await syncFromServer();
         updateAccountButton();
@@ -1396,6 +1402,8 @@
         coins = 0; coinValEl.textContent = '0';
         playTime = 0;
         startPlayTimeTracking();
+        localStorage.setItem('candyblast_token', authToken);
+        localStorage.setItem('candyblast_user', currentUserId);
         msgEl.textContent = '登録が完了しました！復元コードは管理者のDiscordに通知されました。';
         msgEl.className='auth-msg ok';
         await syncToServer();
@@ -1725,7 +1733,7 @@
     modalOverlay.classList.add('show');
   });
 
-  // ===================== 🆕 チャット＆プロフィール機能 =====================
+  // ===================== チャット＆プロフィール機能 =====================
   let chatMessages = [];
   let chatPollingInterval = null;
 
@@ -1865,7 +1873,6 @@
 
   chatBtn.addEventListener('click', () => {
     renderChatModal();
-    // モーダルが閉じられたらポーリング停止
     const observer = new MutationObserver(() => {
       if (!modalOverlay.classList.contains('show')) {
         if (chatPollingInterval) {
@@ -1877,14 +1884,54 @@
     observer.observe(modalOverlay, { attributes: true, attributeFilter: ['class'] });
   });
 
+  // ===================== ⭐ 自動ログイン復元 =====================
+  async function tryAutoLogin() {
+    const savedToken = localStorage.getItem('candyblast_token');
+    const savedUser = localStorage.getItem('candyblast_user');
+    if (!savedToken || !savedUser) return false;
+    authToken = savedToken;
+    currentUserId = savedUser;
+    try {
+      await syncFromServer();
+      updateAccountButton();
+      // ログイン後のデータ反映
+      if (currentUserId) {
+        startPlayTimeTracking();
+        // クエスト再読み込み
+        await loadDailyQuests();
+        // UI更新
+        if (modalOverlay.classList.contains('show') && modalContent.dataset.mode === 'auth') {
+          renderAuthModal();
+        }
+      }
+      console.log('✅ 自動ログイン成功:', currentUserId);
+      return true;
+    } catch (e) {
+      console.warn('⚠️ 自動ログイン失敗（トークン無効）:', e);
+      localStorage.removeItem('candyblast_token');
+      localStorage.removeItem('candyblast_user');
+      authToken = null;
+      currentUserId = null;
+      return false;
+    }
+  }
+
   // ===================== 初期化 =====================
   (async function start(){
+    // ⭐ 自動ログインを先に試す
+    const autoLoggedIn = await tryAutoLogin();
+
     await loadBest();
     await loadCoins();
     await loadSkinsData();
     const isFirstTime = await loadSettings();
     await loadDailyQuests();
-    updateAccountButton();
+
+    // 自動ログインが成功していない場合のみアカウントボタン更新
+    if (!autoLoggedIn) {
+      updateAccountButton();
+    }
+
     updateModeBadge();
     initBoard();
     fillTray();
