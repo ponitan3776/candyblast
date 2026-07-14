@@ -26,28 +26,30 @@
   img, canvas, video, iframe { max-width:100%; touch-action:none; }
   #app{ display:flex; flex-direction:column; align-items:center; height:100%; width:100%;
     padding: max(10px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom)); gap:8px; }
-  header{ width:100%; max-width:520px; display:flex; align-items:center; justify-content:space-between; padding:4px 6px; gap:8px; }
-  /* ⭐ 戻るボタン縮小（クエストボタンと同じサイズ感） */
+  header{ width:100%; max-width:520px; display:flex; align-items:center; justify-content:space-between; padding:4px 6px; gap:8px; flex-wrap:nowrap; }
+  .title-wrap{ display:flex; flex-direction:column; gap:1px; flex-shrink:0; }
   .title{ 
-    font-family:'Baloo 2', sans-serif; font-weight:800; font-size:clamp(14px, 3vw, 20px);
+    font-family:'Baloo 2', sans-serif; font-weight:800; font-size:clamp(13px, 2.8vw, 18px);
     background:linear-gradient(90deg, var(--gold), var(--pink)); 
     -webkit-background-clip:text; background-clip:text; color:transparent;
     cursor: pointer;
-    padding: 2px 8px;
-    border-radius: 10px;
+    padding: 2px 6px;
+    border-radius: 8px;
     transition: background 0.2s ease;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    line-height: 1.4;
+    gap: 3px;
+    line-height: 1.3;
+    white-space:nowrap;
   }
   .title:hover{ background:rgba(255,255,255,0.08); }
-  .title::before{ content:"← "; font-size:0.8em; }
-  .header-right{ display:flex; align-items:center; gap:6px; }
-  .icon-btn{ width:36px;height:36px;border-radius:12px; background:var(--panel-light);
-    border:1px solid rgba(255,255,255,0.08); display:flex;align-items:center;justify-content:center; font-size:16px; cursor:pointer; flex-shrink:0; }
-  .pill-btn{ height:36px; border-radius:12px; background:var(--panel-light); border:1px solid rgba(255,255,255,0.08);
-    display:flex; align-items:center; gap:5px; padding:0 10px; font-size:13px; font-weight:700; cursor:pointer; color:var(--text); white-space:nowrap; }
+  .title::before{ content:"← "; font-size:0.75em; }
+  .mode-badge{ font-size:9px; color:var(--text-dim); font-weight:700; letter-spacing:0.2px; white-space:nowrap; }
+  .header-right{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
+  .icon-btn{ width:32px;height:32px;border-radius:10px; background:var(--panel-light);
+    border:1px solid rgba(255,255,255,0.08); display:flex;align-items:center;justify-content:center; font-size:14px; cursor:pointer; flex-shrink:0; }
+  .pill-btn{ height:32px; border-radius:10px; background:var(--panel-light); border:1px solid rgba(255,255,255,0.08);
+    display:flex; align-items:center; gap:4px; padding:0 8px; font-size:11px; font-weight:700; cursor:pointer; color:var(--text); white-space:nowrap; }
 
   .scoreboard{ width:100%; max-width:520px; display:flex; gap:8px; }
   .score-card{ flex:1; background:var(--panel); border-radius:16px; padding:7px 10px; text-align:center;
@@ -135,9 +137,6 @@
   .claim-btn{ background:var(--gold); border:none; border-radius:10px; padding:6px 12px; font-weight:800; font-size:12px; color:#2a1730; cursor:pointer; }
   .claim-btn:disabled{ background:rgba(255,255,255,0.15); color:var(--text-dim); cursor:default; }
 
-  .title-wrap{ display:flex; flex-direction:column; gap:1px; }
-  .mode-badge{ font-size:10.5px; color:var(--text-dim); font-weight:700; letter-spacing:0.3px; }
-
   .mode-card{ background:var(--panel-light); border-radius:14px; padding:12px; margin-bottom:8px; text-align:left;
     cursor:pointer; border:2px solid transparent; transition:border-color 0.15s ease, background 0.15s ease; }
   .mode-card.selected{ border-color:var(--gold); background:rgba(255,217,61,0.12); }
@@ -168,20 +167,6 @@
   .admin-setting-item .label-row span {
     font-weight: 700;
     font-size: 14px;
-  }
-  .admin-setting-item input[type="number"] {
-    width: 100%;
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.12);
-    background: var(--bg-deep2);
-    color: var(--text);
-    font-size: 15px;
-    font-family: 'Nunito', sans-serif;
-    margin-bottom: 6px;
-  }
-  .admin-setting-item input[type="number"]:focus {
-    outline: 2px solid var(--gold);
   }
   .admin-setting-item input[type="text"] {
     width: 100%;
@@ -243,11 +228,13 @@
     padding: 10px;
     margin-top: 6px;
     font-size: 13px;
-    max-height: 120px;
+    max-height: 150px;
     overflow-y: auto;
     white-space: pre-wrap;
     color: var(--text-dim);
     border: 1px solid rgba(255,255,255,0.05);
+    font-family: 'Courier New', monospace;
+    text-align: left;
   }
   .cmd-output .success { color: var(--mint); }
   .cmd-output .error { color: var(--coral); }
@@ -264,8 +251,8 @@
       <div class="mode-badge" id="modeBadge"></div>
     </div>
     <div class="header-right">
-      <div class="pill-btn" id="questBtn">📋 クエスト</div>
-      <div class="icon-btn" id="settingsBtn" title="モード・スキン設定">⚙️</div>
+      <div class="pill-btn" id="questBtn">📋</div>
+      <div class="icon-btn" id="settingsBtn" title="設定">⚙️</div>
       <div class="icon-btn" id="soundBtn">🔊</div>
       <div class="icon-btn" id="accountBtn">👤</div>
       <div class="icon-btn" id="rankingBtn" title="ランキング">🏆</div>
@@ -316,7 +303,7 @@
   document.addEventListener('gesturechange', function(e) { e.preventDefault(); });
   document.addEventListener('gestureend', function(e) { e.preventDefault(); });
 
-  // ===================== 戻るボタン（サイズはCSSで調整済み） =====================
+  // ===================== 戻るボタン =====================
   document.getElementById('backButton').addEventListener('click', function(e) {
     e.preventDefault();
     if (confirm('本当に戻りますか？\nゲームの進行は保存されません。')) {
@@ -486,7 +473,7 @@
   const STORAGE_SETTINGS = 'candyblast-settings-v1';
   const STORAGE_SKINS = 'candyblast-skins-v1';
 
-  // ===================== ランキング用（モード別） =====================
+  // ===================== ランキング用（柔らかいを一番右に） =====================
   const RANKING_MODES = ['baked', 'hard', 'extreme', 'soft'];
   const RANKING_MODE_LABELS = {
     baked: '🍪 焼成',
@@ -1380,8 +1367,8 @@
         body: JSON.stringify({ 
           bestScore: best, 
           coins, 
-          skins: ownedSkins,        // ← 所有スキン
-          equippedSkin,             // ← 装備中スキン
+          skins: ownedSkins,
+          equippedSkin,
           quests,
           mode: currentMode,
           size: SIZE
@@ -1418,8 +1405,12 @@
         const data = await res.json();
         adminDisabledBlocks = data.disabledBlocks || [];
         adminSafetyMode = data.safetyMode || false;
+        // ブロック設定が反映されているか確認
+        console.log('✅ admin設定読み込み完了:', { adminDisabledBlocks, adminSafetyMode });
       }
-    } catch(e) {}
+    } catch(e) {
+      console.warn('admin設定読み込み失敗:', e);
+    }
   }
 
   // ===================== 管理者コマンド =====================
@@ -1444,34 +1435,31 @@
     modalContent.dataset.mode = 'admin';
     let html = `
       <h2 style="color:var(--gold);">🔧 管理者パネル</h2>
-      <div class="sub">admin専用設定です。</div>
+      <div class="sub">admin専用コマンド実行欄です。</div>
     `;
 
+    // コマンド入力のみ
     html += `
       <div class="admin-setting-item">
         <div class="label-row"><span>⌨️ 管理者コマンド</span></div>
         <input type="text" id="adminCmdInput" placeholder="コマンドを入力..." style="width:100%;padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:var(--bg-deep2);color:var(--text);font-size:14px;font-family:'Nunito',sans-serif;margin-bottom:6px;">
         <button class="primary-btn" id="adminCmdBtn">実行</button>
-        <div class="cmd-output" id="adminCmdOutput">コマンドを入力して実行してください。</div>
+        <div class="cmd-output" id="adminCmdOutput">📋 コマンド一覧:
+  /setcoins &lt;amount&gt; - コインを指定値に設定
+  /setscore &lt;mode&gt; &lt;score&gt; - モード別スコア設定 (baked, hard, extreme, soft)
+  /safety [on|off] - 強制セーフティモード（引数なしで状態表示）
+  /resetquests - 全ユーザーのクエスト進捗リセット
+  /ban &lt;ID&gt; - ユーザーをBAN
+  /unban &lt;ID&gt; - BAN解除
+  /resetuser &lt;ID&gt; - ユーザーデータリセット
+  /listusers - ユーザー一覧表示
+  /search &lt;ID&gt; - ユーザー情報検索
+  /stats - サーバー統計情報
+  /help - このヘルプ</div>
       </div>
     `;
 
-    html += `
-      <div class="admin-setting-item">
-        <div class="label-row"><span>🪙 コイン編集（指定値に変更）</span></div>
-        <input type="number" id="adminCoinsInput" value="${coins}" min="0" step="1">
-        <button class="primary-btn" id="adminCoinsBtn">コインを設定</button>
-      </div>
-    `;
-
-    html += `
-      <div class="admin-setting-item">
-        <div class="label-row"><span>🏆 ベストスコア編集（指定値に変更）</span></div>
-        <input type="number" id="adminScoreInput" value="${best}" min="0" step="1">
-        <button class="primary-btn" id="adminScoreBtn">スコアを設定</button>
-      </div>
-    `;
-
+    // ブロック出現設定（ここに残す）
     html += `
       <div class="admin-setting-item">
         <div class="label-row"><span>🧩 ブロック出現設定（オフにすると出現しなくなります）</span></div>
@@ -1502,23 +1490,9 @@
     });
     html += `</div></div>`;
 
-    html += `
-      <div class="admin-setting-item">
-        <div class="label-row">
-          <span>🛡️ 強制セーフティモード</span>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-size:12px; color:${adminSafetyMode ? 'var(--gold)' : 'var(--text-dim)'};">${adminSafetyMode ? 'ON' : 'OFF'}</span>
-            <div class="toggle-switch ${adminSafetyMode ? 'active' : ''}" id="safetyToggle" style="cursor:pointer;">
-              <div class="knob"></div>
-            </div>
-          </div>
-        </div>
-        <div class="sub" style="margin:4px 0 0;">ONにするとゲームオーバーが発生しなくなります（adminのみ）。</div>
-      </div>
-    `;
-
     modalContent.innerHTML = html;
 
+    // コマンド実行
     document.getElementById('adminCmdBtn').addEventListener('click', async () => {
       const input = document.getElementById('adminCmdInput');
       const output = document.getElementById('adminCmdOutput');
@@ -1530,40 +1504,7 @@
       input.value = '';
     });
 
-    document.getElementById('adminCoinsBtn').addEventListener('click', async () => {
-      const val = parseInt(document.getElementById('adminCoinsInput').value, 10);
-      if (isNaN(val) || val < 0) return;
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/admin/coins`, {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${authToken}` },
-          body: JSON.stringify({ coins: val })
-        });
-        if (res.ok) {
-          coins = val;
-          updateCoinUI();
-          renderAdminPanel();
-        }
-      } catch(e) {}
-    });
-
-    document.getElementById('adminScoreBtn').addEventListener('click', async () => {
-      const val = parseInt(document.getElementById('adminScoreInput').value, 10);
-      if (isNaN(val) || val < 0) return;
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/admin/score`, {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${authToken}` },
-          body: JSON.stringify({ bestScore: val })
-        });
-        if (res.ok) {
-          best = val;
-          bestValEl.textContent = best;
-          renderAdminPanel();
-        }
-      } catch(e) {}
-    });
-
+    // ブロックトグル
     document.querySelectorAll('.toggle-switch[data-block-index]').forEach(el => {
       el.addEventListener('click', async function() {
         const idx = parseInt(this.dataset.blockIndex, 10);
@@ -1580,27 +1521,11 @@
             adminDisabledBlocks = data.settings.disabledBlocks || [];
             renderAdminPanel();
           }
-        } catch(e) {}
+        } catch(e) {
+          console.warn('ブロックトグル失敗:', e);
+        }
       });
     });
-
-    const safetyToggle = document.getElementById('safetyToggle');
-    if (safetyToggle) {
-      safetyToggle.addEventListener('click', async function() {
-        const newMode = !adminSafetyMode;
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/admin/safety-toggle`, {
-            method: 'POST',
-            headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${authToken}` },
-            body: JSON.stringify({ safetyMode: newMode })
-          });
-          if (res.ok) {
-            adminSafetyMode = newMode;
-            renderAdminPanel();
-          }
-        } catch(e) {}
-      });
-    }
   }
 
   adminPanelBtn.addEventListener('click', () => {
@@ -1610,7 +1535,7 @@
     }
   });
 
-  // ===================== ランキング（モード別タブ） =====================
+  // ===================== ランキング（モード別タブ・柔らかいが一番右） =====================
   async function renderRankingModal() {
     modalContent.dataset.mode = 'ranking';
     let html = `
