@@ -1,49 +1,49 @@
 // ===================== サーバー同期 =====================
 async function syncToServer() {
-  if (!authToken) return;
+  if (!G.authToken) return;
   try {
     await fetch(`${API_BASE_URL}/api/sync`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${G.authToken}` },
       body: JSON.stringify({
-        bestScore: best,
-        coins,
-        skins: ownedSkins,
-        equippedSkin,
-        quests,
-        mode: currentMode,
-        size: SIZE,
-        playTime
+        bestScore: G.best,
+        coins: G.coins,
+        skins: window.ownedSkins,
+        equippedSkin: window.equippedSkin,
+        quests: G.quests,
+        mode: G.currentMode,
+        size: G.SIZE,
+        playTime: G.playTime
       })
     });
-  } catch (err) { console.warn('サーバー同期に失敗しました:', err.message); }
+  } catch (err) { console.warn('サーバー同期に失敗:', err.message); }
 }
 
 async function syncFromServer() {
-  if (!authToken) return;
+  if (!G.authToken) return;
   try {
-    const r = await fetch(`${API_BASE_URL}/api/sync`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+    const r = await fetch(`${API_BASE_URL}/api/sync`, { headers: { 'Authorization': `Bearer ${G.authToken}` } });
     if (!r.ok) return;
     const data = await r.json();
-    best = Math.max(best, data.bestScore || 0);
-    coins = Math.max(coins, data.coins || 0);
-    if (data.skins) ownedSkins = data.skins;
+    G.best = Math.max(G.best, data.bestScore || 0);
+    G.coins = Math.max(G.coins, data.coins || 0);
+    if (data.skins) window.ownedSkins = data.skins;
     if (data.equippedSkin) {
-      equippedSkin = data.equippedSkin;
-      applySkin(equippedSkin);
+      window.equippedSkin = data.equippedSkin;
+      applySkin(window.equippedSkin);
     }
-    if (data.playTime !== undefined) playTime = data.playTime;
-    bestValEl.textContent = best;
+    if (data.playTime !== undefined) G.playTime = data.playTime;
+    G.bestValEl.textContent = G.best;
     updateCoinUI();
-    saveBest(best);
-  } catch (err) { console.warn('サーバーからの取得に失敗しました:', err.message); }
+    saveBest(G.best);
+  } catch (err) { console.warn('サーバー取得失敗:', err.message); }
 }
 
 function syncPlayTime() {
-  if (!authToken) return;
+  if (!G.authToken) return;
   fetch(`${API_BASE_URL}/api/sync`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-    body: JSON.stringify({ playTime })
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${G.authToken}` },
+    body: JSON.stringify({ playTime: G.playTime })
   }).catch(() => {});
 }
