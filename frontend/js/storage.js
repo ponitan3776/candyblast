@@ -2,9 +2,9 @@
 async function loadBest() {
   try {
     const res = await window.storage.get(STORAGE_BEST, false);
-    if (res && res.value) best = parseInt(res.value, 10) || 0;
-  } catch (err) { best = 0; }
-  bestValEl.textContent = best;
+    if (res && res.value) G.best = parseInt(res.value, 10) || 0;
+  } catch (err) { G.best = 0; }
+  G.bestValEl.textContent = G.best;
 }
 
 async function saveBest(val) {
@@ -14,9 +14,9 @@ async function saveBest(val) {
 async function loadCoins() {
   try {
     const res = await window.storage.get(STORAGE_COINS, false);
-    if (res && res.value) coins = parseInt(res.value, 10) || 0;
-  } catch (err) { coins = 0; }
-  coinValEl.textContent = coins;
+    if (res && res.value) G.coins = parseInt(res.value, 10) || 0;
+  } catch (err) { G.coins = 0; }
+  G.coinValEl.textContent = G.coins;
 }
 
 async function saveCoins(val) {
@@ -29,8 +29,8 @@ async function loadSettings() {
     const res = await window.storage.get(STORAGE_SETTINGS, false);
     if (res && res.value) {
       const parsed = JSON.parse(res.value);
-      currentMode = MODES[parsed.mode] ? parsed.mode : 'baked';
-      SIZE = (currentMode === 'extreme') ? 8 : Math.min(18, Math.max(5, parsed.size || 8));
+      G.currentMode = MODES[parsed.mode] ? parsed.mode : 'baked';
+      G.SIZE = (G.currentMode === 'extreme') ? 8 : Math.min(18, Math.max(5, parsed.size || 8));
       isFirstTime = false;
     }
   } catch (err) {}
@@ -39,7 +39,7 @@ async function loadSettings() {
 
 async function saveSettings() {
   try {
-    await window.storage.set(STORAGE_SETTINGS, JSON.stringify({ mode: currentMode, size: SIZE }), false);
+    await window.storage.set(STORAGE_SETTINGS, JSON.stringify({ mode: G.currentMode, size: G.SIZE }), false);
   } catch (err) {}
 }
 
@@ -48,16 +48,16 @@ async function loadSkinsData() {
     const res = await window.storage.get(STORAGE_SKINS, false);
     if (res && res.value) {
       const parsed = JSON.parse(res.value);
-      ownedSkins = (parsed.owned && parsed.owned.length) ? parsed.owned : ['default'];
-      equippedSkin = parsed.equipped || 'default';
+      window.ownedSkins = (parsed.owned && parsed.owned.length) ? parsed.owned : ['default'];
+      window.equippedSkin = parsed.equipped || 'default';
     }
-  } catch (err) { ownedSkins = ['default']; equippedSkin = 'default'; }
-  applySkin(equippedSkin);
+  } catch (err) { window.ownedSkins = ['default']; window.equippedSkin = 'default'; }
+  applySkin(window.equippedSkin);
 }
 
 async function saveSkinsData() {
   try {
-    await window.storage.set(STORAGE_SKINS, JSON.stringify({ owned: ownedSkins, equipped: equippedSkin }), false);
+    await window.storage.set(STORAGE_SKINS, JSON.stringify({ owned: window.ownedSkins, equipped: window.equippedSkin }), false);
   } catch (err) {}
 }
 
@@ -72,20 +72,20 @@ async function loadDailyQuests() {
     if (res && res.value) {
       const parsed = JSON.parse(res.value);
       if (parsed.date === today) {
-        dailyStats = { ...DAILY_STATS_DEFAULT, ...parsed.stats, date: today };
-        quests = parsed.quests;
+        G.dailyStats = { ...DAILY_STATS_DEFAULT, ...parsed.stats, date: today };
+        G.quests = parsed.quests;
         return;
       }
     }
   } catch (err) {}
-  dailyStats = { date: today, ...DAILY_STATS_DEFAULT };
-  quests = pickDailyQuests();
+  G.dailyStats = { date: today, ...DAILY_STATS_DEFAULT };
+  G.quests = pickDailyQuests();
   await saveDailyQuests();
 }
 
 async function saveDailyQuests() {
-  dailyStats.date = todayKey();
+  G.dailyStats.date = todayKey();
   try {
-    await window.storage.set(STORAGE_QUESTS, JSON.stringify({ date: dailyStats.date, stats: dailyStats, quests }), false);
+    await window.storage.set(STORAGE_QUESTS, JSON.stringify({ date: G.dailyStats.date, stats: G.dailyStats, quests: G.quests }), false);
   } catch (err) {}
 }
