@@ -103,3 +103,32 @@ function renderChatModal() {
     <h2 style="color:var(--gold);">💬 グローバルチャット</h2>
     <div class="sub">全ユーザーと会話できます。</div>
     <div id="chatMessages" style="height:300px; overflow-y:auto; background:var(--bg-deep2); border-radius:12px; padding:10px; margin:8px 0; text-align:left; border:1px solid rgba(255,255,255,0.05);">
+      <div style="text-align:center; color:var(--text-dim);">読み込み中...</div>
+    </div>
+    <div style="display:flex; gap:6px;">
+      <input type="text" id="chatInput" placeholder="メッセージを入力..." style="flex:1; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background:var(--bg-deep2); color:var(--text); font-size:14px; font-family:'Nunito',sans-serif;">
+      <button class="primary-btn" id="chatSendBtn" style="flex-shrink:0; width:auto; padding:10px 20px; margin:0;">送信</button>
+    </div>
+    <div style="margin-top:6px; text-align:right; font-size:10px; color:var(--text-dim);">最新50件を表示</div>
+  `;
+  G.modalOverlay.classList.add('show');
+
+  fetchChatMessages();
+
+  document.getElementById('chatSendBtn').addEventListener('click', async () => {
+    const input = document.getElementById('chatInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    await sendChatMessage(msg);
+    input.value = '';
+  });
+
+  document.getElementById('chatInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      document.getElementById('chatSendBtn').click();
+    }
+  });
+
+  if (G.chatPollingInterval) clearInterval(G.chatPollingInterval);
+  G.chatPollingInterval = setInterval(fetchChatMessages, 3000);
+}
