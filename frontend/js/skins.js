@@ -68,21 +68,23 @@ const SKINS = [
     ] }
 ];
 
-let ownedSkins = ['default'];
-let equippedSkin = 'default';
-let COLORS = []; // 動的に設定される
+window.ownedSkins = ['default'];
+window.equippedSkin = 'default';
+window.COLORS = [];
 
 function applySkin(id) {
   const skin = SKINS.find(s => s.id === id) || SKINS[0];
-  equippedSkin = skin.id;
+  window.equippedSkin = skin.id;
   Object.entries(skin.vars).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
   const titleEl = document.querySelector('.title');
   if (titleEl) titleEl.style.background = skin.titleGrad;
-  COLORS.length = 0;
-  skin.colors.forEach(c => COLORS.push(c));
-  if (cellEls && cellEls.length) {
-    board.forEach((cellData, idx) => {
-      if (cellData.filled && COLORS[cellData.colorIdx]) cellEls[idx].style.background = COLORS[cellData.colorIdx].bg;
+  window.COLORS.length = 0;
+  skin.colors.forEach(c => window.COLORS.push(c));
+  if (G.cellEls && G.cellEls.length) {
+    G.board.forEach((cellData, idx) => {
+      if (cellData.filled && window.COLORS[cellData.colorIdx]) {
+        G.cellEls[idx].style.background = window.COLORS[cellData.colorIdx].bg;
+      }
     });
   }
   renderTray();
@@ -90,9 +92,9 @@ function applySkin(id) {
 
 function buySkin(id) {
   const skin = SKINS.find(s => s.id === id);
-  if (!skin || ownedSkins.includes(id) || coins < skin.price) return;
-  coins -= skin.price;
-  ownedSkins.push(id);
+  if (!skin || window.ownedSkins.includes(id) || G.coins < skin.price) return;
+  G.coins -= skin.price;
+  window.ownedSkins.push(id);
   updateCoinUI();
   saveSkinsData();
   syncToServer();
@@ -100,18 +102,18 @@ function buySkin(id) {
 }
 
 function equipSkin(id) {
-  if (!ownedSkins.includes(id)) return;
+  if (!window.ownedSkins.includes(id)) return;
   applySkin(id);
   saveSkinsData();
   renderSettingsModal('skin');
 }
 
 function renderSkinTab() {
-  let html = `<div class="sub" style="margin-bottom:10px;">🪙 ${coins} 所持中。ゲームで貯めたコインで見た目を変えられます。</div>`;
+  let html = `<div class="sub" style="margin-bottom:10px;">🪙 ${G.coins} 所持中。ゲームで貯めたコインで見た目を変えられます。</div>`;
   SKINS.forEach(skin => {
-    const owned = ownedSkins.includes(skin.id);
-    const equipped = equippedSkin === skin.id;
-    const canBuy = !owned && coins >= skin.price;
+    const owned = window.ownedSkins.includes(skin.id);
+    const equipped = window.equippedSkin === skin.id;
+    const canBuy = !owned && G.coins >= skin.price;
     let btnLabel = equipped ? '装備中' : owned ? '装備する' : (skin.price === 0 ? '入手する' : (canBuy ? '購入する' : 'コインが足りません'));
     let btnAction = equipped ? '' : owned ? 'equip' : 'buy';
     html += `
