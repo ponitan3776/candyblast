@@ -1,27 +1,24 @@
 // ===================== 管理者設定 =====================
-let adminDisabledBlocks = [];
-let adminSafetyMode = false;
-
 async function loadAdminSettings() {
-  if (!authToken || currentUserId !== 'admin') return;
+  if (!G.authToken || G.currentUserId !== 'admin') return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/admin/block-settings`, {
-      headers: { 'Authorization': `Bearer ${authToken}` }
+      headers: { 'Authorization': `Bearer ${G.authToken}` }
     });
     if (res.ok) {
       const data = await res.json();
-      adminDisabledBlocks = data.disabledBlocks || [];
-      adminSafetyMode = data.safetyMode || false;
+      G.adminDisabledBlocks = data.disabledBlocks || [];
+      G.adminSafetyMode = data.safetyMode || false;
     }
   } catch (e) {}
 }
 
 async function executeAdminCommand(cmd) {
-  if (!authToken || currentUserId !== 'admin') return '❌ 管理者権限がありません';
+  if (!G.authToken || G.currentUserId !== 'admin') return '❌ 管理者権限がありません';
   try {
     const res = await fetch(`${API_BASE_URL}/api/admin/command`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${G.authToken}` },
       body: JSON.stringify({ command: cmd })
     });
     const data = await res.json();
@@ -29,12 +26,12 @@ async function executeAdminCommand(cmd) {
     if (cmd.startsWith('/setcoins')) {
       const parts = cmd.split(' ');
       const newCoins = parseInt(parts[1]);
-      if (!isNaN(newCoins) && newCoins >= 0) { coins = newCoins; updateCoinUI(); }
+      if (!isNaN(newCoins) && newCoins >= 0) { G.coins = newCoins; updateCoinUI(); }
     }
     if (cmd.startsWith('/setscore')) {
       const parts = cmd.split(' ');
       const score = parseInt(parts[2]);
-      if (!isNaN(score) && score >= 0) { best = score; bestValEl.textContent = best; saveBest(best); }
+      if (!isNaN(score) && score >= 0) { G.best = score; G.bestValEl.textContent = G.best; saveBest(G.best); }
     }
     return data.result || '✅ コマンドを実行しました';
   } catch (e) {
@@ -43,7 +40,7 @@ async function executeAdminCommand(cmd) {
 }
 
 async function renderAdminPanel() {
-  modalContent.dataset.mode = 'admin';
+  G.modalContent.dataset.mode = 'admin';
   let html = `
     <h2 style="color:var(--gold);">🔧 管理者パネル</h2>
     <div class="sub">admin専用コマンド実行欄です。</div>
@@ -69,8 +66,24 @@ async function renderAdminPanel() {
       <div class="label-row"><span>🧩 ブロック出現設定（オフにすると出現しなくなります）</span></div>
       <div style="max-height:200px; overflow-y:auto;">
   `;
+  const SHAPES = window.SHAPES || [
+    [[0,0]],[[0,0]],
+    [[0,0],[0,1]],[[0,0],[0,1]],
+    [[0,0],[1,0]],[[0,0],[1,0]],
+    [[0,0],[0,1],[0,2]],[[0,0],[1,0],[2,0]],
+    [[0,0],[1,0],[1,1]],[[0,0],[0,1],[1,0]],[[0,0],[0,1],[1,1]],[[0,1],[1,0],[1,1]],
+    [[0,0],[0,1],[0,2],[0,3]],[[0,0],[1,0],[2,0],[3,0]],
+    [[0,0],[0,1],[1,0],[1,1]],[[0,0],[0,1],[1,0],[1,1]],
+    [[0,0],[0,1],[0,2],[1,1]],[[1,0],[1,1],[1,2],[0,1]],
+    [[0,0],[1,0],[2,0],[1,1]],[[0,1],[1,1],[2,1],[1,0]],
+    [[0,0],[1,0],[2,0],[2,1]],[[0,1],[1,1],[2,1],[2,0]],
+    [[0,1],[0,2],[1,0],[1,1]],[[0,0],[0,1],[1,1],[1,2]],
+    [[0,1],[1,0],[1,1],[1,2],[2,1]],
+    [[0,0],[0,1],[0,2],[0,3],[0,4]],[[0,0],[1,0],[2,0],[3,0],[4,0]],
+    [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[2,2]]
+  ];
   SHAPES.forEach((shape, idx) => {
-    const isOff = adminDisabledBlocks.includes(idx);
+    const isOff = G.adminDisabledBlocks.includes(idx);
     const { rows, cols } = shapeBounds(shape);
     const size = 24;
     html += `
@@ -93,7 +106,7 @@ async function renderAdminPanel() {
     `;
   });
   html += `</div></div>`;
-  modalContent.innerHTML = html;
+  G.modalContent.innerHTML = html;
 
   document.getElementById('adminCmdBtn').addEventListener('click', async () => {
     const input = document.getElementById('adminCmdInput');
@@ -109,17 +122,17 @@ async function renderAdminPanel() {
   document.querySelectorAll('.toggle-switch[data-block-index]').forEach(el => {
     el.addEventListener('click', async function() {
       const idx = parseInt(this.dataset.blockIndex, 10);
-      const currentOff = adminDisabledBlocks.includes(idx);
+      const currentOff = G.adminDisabledBlocks.includes(idx);
       const enabled = currentOff;
       try {
         const res = await fetch(`${API_BASE_URL}/api/admin/block-toggle`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${G.authToken}` },
           body: JSON.stringify({ blockIndex: idx, enabled })
         });
         if (res.ok) {
           const data = await res.json();
-          adminDisabledBlocks = data.settings.disabledBlocks || [];
+          G.adminDisabledBlocks = data.settings.disabledBlocks || [];
           renderAdminPanel();
         }
       } catch (e) {}
