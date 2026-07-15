@@ -1,5 +1,5 @@
 // ===================== 設定 =====================
-const API_BASE_URL = 'https://blockblitz-backend.onrender.com';  // ← 実際のURLに変更！
+const API_BASE_URL = 'https://blockblitz-backend.onrender.com';
 
 const STORAGE_BEST = 'blockblitz-highscore';
 const STORAGE_COINS = 'blockblitz-coins';
