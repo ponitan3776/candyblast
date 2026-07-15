@@ -24,16 +24,16 @@ function pickDailyQuests() {
 }
 
 function updateQuestProgress() {
-  quests.forEach(q => { q.progress = dailyStats[q.statKey] || 0; });
+  G.quests.forEach(q => { q.progress = G.dailyStats[q.statKey] || 0; });
   saveDailyQuests();
-  if (modalOverlay.classList.contains('show') && modalContent.dataset.mode === 'quests') renderQuestModal();
+  if (G.modalOverlay.classList.contains('show') && G.modalContent.dataset.mode === 'quests') renderQuestModal();
 }
 
 function claimQuest(id) {
-  const q = quests.find(q => q.id === id);
+  const q = G.quests.find(q => q.id === id);
   if (!q || q.claimed || q.progress < q.target) return;
   q.claimed = true;
-  coins += q.reward;
+  G.coins += q.reward;
   updateCoinUI();
   saveDailyQuests();
   renderQuestModal();
@@ -41,9 +41,9 @@ function claimQuest(id) {
 }
 
 function renderQuestModal() {
-  modalContent.dataset.mode = 'quests';
+  G.modalContent.dataset.mode = 'quests';
   let html = `<h2 style="color:var(--mint);">📋 デイリークエスト</h2><div class="sub">毎日リセットされます。がんばって集めよう！</div>`;
-  quests.forEach(q => {
+  G.quests.forEach(q => {
     const pct = Math.min(100, Math.floor((q.progress / q.target) * 100));
     const done = q.progress >= q.target;
     html += `
@@ -58,8 +58,8 @@ function renderQuestModal() {
         </div>
       </div>`;
   });
-  modalContent.innerHTML = html;
-  modalContent.querySelectorAll('.claim-btn').forEach(btn => {
+  G.modalContent.innerHTML = html;
+  G.modalContent.querySelectorAll('.claim-btn').forEach(btn => {
     btn.addEventListener('click', () => claimQuest(btn.dataset.qid));
   });
 }
